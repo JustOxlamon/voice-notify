@@ -27,9 +27,9 @@
 
 Короткие демо лежат в [`examples/`](examples/README.md):
 
-- Svetlana: [исходный текст](examples/svetlana-raw.mp3), [CMU-транскрипция](examples/svetlana-plugin-cmu.mp3)
-- Ava: [исходный текст](examples/ava-raw.mp3), [CMU-транскрипция](examples/ava-plugin-cmu.mp3)
-- Seraphina: [исходный текст](examples/seraphina-raw.mp3), [CMU-транскрипция](examples/seraphina-plugin-cmu.mp3)
+- Svetlana: [auto](examples/svetlana-auto.mp3), [raw для сравнения](examples/svetlana-raw.mp3)
+- Ava: [auto](examples/ava-auto.mp3), [принудительный CMU](examples/ava-cmu-forced.mp3)
+- Seraphina: [auto](examples/seraphina-auto.mp3), [принудительный CMU](examples/seraphina-cmu-forced.mp3)
 
 Svetlana — голос Microsoft Edge TTS; источник и лицензионные пометки — в
 [`examples/README.md`](examples/README.md).

@@ -3,19 +3,21 @@
 Short demo clips generated with `edge-tts` 7.3.1 and the Microsoft voice
 `ru-RU-SvetlanaNeural` (rate `+0%`, pitch `+0Hz`).
 
-| Voice | Raw text | CMU transcription |
+| Voice | Default `auto` | Forced comparison |
 |---|---|---|
-| Svetlana (native ru-RU) | [`svetlana-raw.mp3`](svetlana-raw.mp3) | [`svetlana-plugin-cmu.mp3`](svetlana-plugin-cmu.mp3) |
-| Ava (multilingual) | [`ava-raw.mp3`](ava-raw.mp3) | [`ava-plugin-cmu.mp3`](ava-plugin-cmu.mp3) |
-| Seraphina (multilingual) | [`seraphina-raw.mp3`](seraphina-raw.mp3) | [`seraphina-plugin-cmu.mp3`](seraphina-plugin-cmu.mp3) |
+| Svetlana (native ru-RU) | [`svetlana-auto.mp3`](svetlana-auto.mp3) — CMU | [`svetlana-raw.mp3`](svetlana-raw.mp3) — raw |
+| Ava (multilingual) | [`ava-auto.mp3`](ava-auto.mp3) — raw | [`ava-cmu-forced.mp3`](ava-cmu-forced.mp3) — CMU |
+| Seraphina (multilingual) | [`seraphina-auto.mp3`](seraphina-auto.mp3) — raw | [`seraphina-cmu-forced.mp3`](seraphina-cmu-forced.mp3) — CMU |
 
 The `.txt` file next to each clip contains the exact spoken text. Svetlana is
 native Russian; Ava and Seraphina are multilingual and have a light Russian
 accent.
 
-With the default `auto` strategy, Svetlana uses the CMU clips and Ava/Seraphina
-use the raw clips. The CMU clips for Ava/Seraphina are a forced comparison:
-English is transliterated to Cyrillic and therefore sounds more Russian-accented.
+`auto` (the default) uses `cmu` for native Russian voices and `whole` for
+multilingual voices. That is why Svetlana's default clip is CMU, while
+Ava/Seraphina's default clips are raw. The forced clips show the opposite
+strategy for comparison; the CMU clips for Ava/Seraphina make English sound
+Russian-accented.
 
 ## Voice source and license
 
@@ -37,14 +39,19 @@ Microsoft's terms for the Edge TTS service.
 ```sh
 python -m edge_tts \
   --voice=ru-RU-SvetlanaNeural \
-  --file=svetlana-raw.txt \
-  --write-media=svetlana-raw.mp3 \
+  --file=svetlana-auto.txt \
+  --write-media=svetlana-auto.mp3 \
   --rate=+0% \
   --no-progress
 ```
 
-For the `cmu` version, first convert English runs with `cmu.ts` (or use the
-`speak` tool with `"strategy": "cmu"`), then synthesize the resulting text.
+For the other voices, change `--voice` and the file names:
+
+- `en-US-AvaMultilingualNeural` with `ava-auto.txt`
+- `de-DE-SeraphinaMultilingualNeural` with `seraphina-auto.txt`
+
+The `*-cmu-forced` clips use the `*-cmu-forced.txt` transcripts; the
+`svetlana-raw` clip uses `svetlana-raw.txt`.
 
 ---
 
@@ -53,20 +60,20 @@ For the `cmu` version, first convert English runs with `cmu.ts` (or use the
 Короткие демонстрационные клипы, сгенерированные `edge-tts` 7.3.1 голосом
 Microsoft `ru-RU-SvetlanaNeural` (rate `+0%`, pitch `+0Hz`).
 
-| Голос | Исходный текст | CMU-транскрипция |
+| Голос | Дефолт `auto` | Принудительное сравнение |
 |---|---|---|
-| Svetlana (native ru-RU) | [`svetlana-raw.mp3`](svetlana-raw.mp3) | [`svetlana-plugin-cmu.mp3`](svetlana-plugin-cmu.mp3) |
-| Ava (multilingual) | [`ava-raw.mp3`](ava-raw.mp3) | [`ava-plugin-cmu.mp3`](ava-plugin-cmu.mp3) |
-| Seraphina (multilingual) | [`seraphina-raw.mp3`](seraphina-raw.mp3) | [`seraphina-plugin-cmu.mp3`](seraphina-plugin-cmu.mp3) |
+| Svetlana (native ru-RU) | [`svetlana-auto.mp3`](svetlana-auto.mp3) — CMU | [`svetlana-raw.mp3`](svetlana-raw.mp3) — raw |
+| Ava (multilingual) | [`ava-auto.mp3`](ava-auto.mp3) — raw | [`ava-cmu-forced.mp3`](ava-cmu-forced.mp3) — CMU |
+| Seraphina (multilingual) | [`seraphina-auto.mp3`](seraphina-auto.mp3) — raw | [`seraphina-cmu-forced.mp3`](seraphina-cmu-forced.mp3) — CMU |
 
 Рядом с каждым mp3 лежит `.txt` с точным произнесённым текстом. Svetlana —
 native-русский голос; Ava и Seraphina — мультиязычные, с лёгким русским
 акцентом.
 
-При стратегии `auto` по умолчанию Svetlana использует CMU-клипы, а
-Ava/Seraphina — raw-клипы. CMU-клипы для Ava/Seraphina — принудительное
-сравнение: английский транслитерируется в кириллицу и звучит с более сильным
-русским акцентом.
+`auto` (по умолчанию) использует `cmu` для native-русских голосов и `whole`
+для мультиязычных. Поэтому у Svetlana дефолтный клип — CMU, а у Ava/Seraphina —
+raw. Принудительные клипы показывают обратную стратегию для сравнения; CMU для
+Ava/Seraphina звучит с русским акцентом.
 
 Голос и сгенерированное аудио принадлежат Microsoft; клипы даны только как
 короткие примеры. Код плагина — MIT, данные CMUdict — ISC/public domain.

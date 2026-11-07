@@ -27,9 +27,9 @@ questions and permission requests, announces subagent completion, and exposes a
 
 Short demos are in [`examples/`](examples/README.md):
 
-- Svetlana: [raw text](examples/svetlana-raw.mp3), [CMU transcription](examples/svetlana-plugin-cmu.mp3)
-- Ava: [raw text](examples/ava-raw.mp3), [CMU transcription](examples/ava-plugin-cmu.mp3)
-- Seraphina: [raw text](examples/seraphina-raw.mp3), [CMU transcription](examples/seraphina-plugin-cmu.mp3)
+- Svetlana: [auto](examples/svetlana-auto.mp3), [raw comparison](examples/svetlana-raw.mp3)
+- Ava: [auto](examples/ava-auto.mp3), [forced CMU](examples/ava-cmu-forced.mp3)
+- Seraphina: [auto](examples/seraphina-auto.mp3), [forced CMU](examples/seraphina-cmu-forced.mp3)
 
 Svetlana is a Microsoft Edge TTS voice; see
 [`examples/README.md`](examples/README.md) for the source and licensing notes.
