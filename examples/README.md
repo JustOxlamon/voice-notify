@@ -3,10 +3,15 @@
 Short demo clips generated with `edge-tts` 7.3.1 and the Microsoft voice
 `ru-RU-SvetlanaNeural` (rate `+0%`, pitch `+0Hz`).
 
-| File | What it shows |
-|---|---|
-| [`svetlana-raw.mp3`](svetlana-raw.mp3) · [text](svetlana-raw.txt) | Svetlana reading the original text exactly as written. |
-| [`svetlana-plugin-cmu.mp3`](svetlana-plugin-cmu.mp3) · [text](svetlana-plugin-cmu.txt) | The plugin's `cmu` strategy: English words are converted to Russian practical transcription before synthesis (`OpenCode` → `оупенкоуд`, `API` → `эй пи ай`). |
+| Voice | Raw text | CMU transcription |
+|---|---|---|
+| Svetlana (native ru-RU) | [`svetlana-raw.mp3`](svetlana-raw.mp3) | [`svetlana-plugin-cmu.mp3`](svetlana-plugin-cmu.mp3) |
+| Ava (multilingual) | [`ava-raw.mp3`](ava-raw.mp3) | [`ava-plugin-cmu.mp3`](ava-plugin-cmu.mp3) |
+| Seraphina (multilingual) | [`seraphina-raw.mp3`](seraphina-raw.mp3) | [`seraphina-plugin-cmu.mp3`](seraphina-plugin-cmu.mp3) |
+
+The `.txt` file next to each clip contains the exact spoken text. Svetlana is
+native Russian; Ava and Seraphina are multilingual and have a light Russian
+accent.
 
 ## Voice source and license
 
@@ -44,10 +49,15 @@ For the `cmu` version, first convert English runs with `cmu.ts` (or use the
 Короткие демонстрационные клипы, сгенерированные `edge-tts` 7.3.1 голосом
 Microsoft `ru-RU-SvetlanaNeural` (rate `+0%`, pitch `+0Hz`).
 
-- [`svetlana-raw.mp3`](svetlana-raw.mp3) — Svetlana читает исходный текст как есть.
-- [`svetlana-plugin-cmu.mp3`](svetlana-plugin-cmu.mp3) — стратегия `cmu`:
-  английские слова переводятся в русскую практическую транскрипцию перед
-  синтезом (`OpenCode` → `оупенкоуд`, `API` → `эй пи ай`).
+| Голос | Исходный текст | CMU-транскрипция |
+|---|---|---|
+| Svetlana (native ru-RU) | [`svetlana-raw.mp3`](svetlana-raw.mp3) | [`svetlana-plugin-cmu.mp3`](svetlana-plugin-cmu.mp3) |
+| Ava (multilingual) | [`ava-raw.mp3`](ava-raw.mp3) | [`ava-plugin-cmu.mp3`](ava-plugin-cmu.mp3) |
+| Seraphina (multilingual) | [`seraphina-raw.mp3`](seraphina-raw.mp3) | [`seraphina-plugin-cmu.mp3`](seraphina-plugin-cmu.mp3) |
+
+Рядом с каждым mp3 лежит `.txt` с точным произнесённым текстом. Svetlana —
+native-русский голос; Ava и Seraphina — мультиязычные, с лёгким русским
+акцентом.
 
 Голос и сгенерированное аудио принадлежат Microsoft; клипы даны только как
 короткие примеры. Код плагина — MIT, данные CMUdict — ISC/public domain.
