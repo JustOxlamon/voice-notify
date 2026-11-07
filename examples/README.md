@@ -13,6 +13,10 @@ The `.txt` file next to each clip contains the exact spoken text. Svetlana is
 native Russian; Ava and Seraphina are multilingual and have a light Russian
 accent.
 
+With the default `auto` strategy, Svetlana uses the CMU clips and Ava/Seraphina
+use the raw clips. The CMU clips for Ava/Seraphina are a forced comparison:
+English is transliterated to Cyrillic and therefore sounds more Russian-accented.
+
 ## Voice source and license
 
 Svetlana is a **Microsoft Edge neural TTS voice**. The audio was generated through
@@ -58,6 +62,11 @@ Microsoft `ru-RU-SvetlanaNeural` (rate `+0%`, pitch `+0Hz`).
 Рядом с каждым mp3 лежит `.txt` с точным произнесённым текстом. Svetlana —
 native-русский голос; Ava и Seraphina — мультиязычные, с лёгким русским
 акцентом.
+
+При стратегии `auto` по умолчанию Svetlana использует CMU-клипы, а
+Ava/Seraphina — raw-клипы. CMU-клипы для Ava/Seraphina — принудительное
+сравнение: английский транслитерируется в кириллицу и звучит с более сильным
+русским акцентом.
 
 Голос и сгенерированное аудио принадлежат Microsoft; клипы даны только как
 короткие примеры. Код плагина — MIT, данные CMUdict — ISC/public domain.

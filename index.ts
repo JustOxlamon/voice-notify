@@ -28,7 +28,7 @@ import { basename, preprocess, shapeForStrategy, type Segment, type Strategy } f
 type Kind = "success" | "failed" | "interrupted" | "question" | "permission" | "subagent" | "retry"
 
 type Options = {
-  strategy: Strategy
+  strategy: Strategy | "auto"
   voiceRu: string
   voiceEn: string
   voicePool: string[]
@@ -60,7 +60,7 @@ const DEFAULT_VOICE_POOL = [
 ]
 
 const DEFAULTS: Options = {
-  strategy: "cmu",
+  strategy: "auto",
   voiceRu: "ru-RU-SvetlanaNeural",
   voiceEn: "ru-RU-SvetlanaNeural",
   voicePool: DEFAULT_VOICE_POOL,
@@ -133,16 +133,20 @@ function normalizeOptions(raw: unknown): Options {
   const events = Array.isArray(input.events)
     ? (input.events as unknown[]).map((value) => String(value).toLowerCase())
     : DEFAULTS.events
-  const strategy = String(pick("strategy") ?? "cmu").toLowerCase()
+  const strategy = String(pick("strategy") ?? "auto").toLowerCase()
   const voicePoolRaw = Array.isArray(input.voicePool)
     ? (input.voicePool as unknown[]).map((value) => String(value).trim()).filter(Boolean)
     : DEFAULTS.voicePool
   const voicePool = voicePoolRaw.length > 0 ? voicePoolRaw : DEFAULTS.voicePool
   return {
     strategy:
-      strategy === "hybrid" || strategy === "transliterate" || strategy === "whole" || strategy === "cmu"
-        ? (strategy as Strategy)
-        : "cmu",
+      strategy === "auto" ||
+      strategy === "hybrid" ||
+      strategy === "transliterate" ||
+      strategy === "whole" ||
+      strategy === "cmu"
+        ? (strategy as Strategy | "auto")
+        : "auto",
     voiceRu: String(pick("voiceRu")),
     voiceEn: String(pick("voiceEn")),
     voicePool,
@@ -259,20 +263,31 @@ export default {
       return { voice, rate: variant.rate, pitch: variant.pitch }
     }
 
+    function resolveStrategy(requested: string, voice: string): Strategy {
+      if (requested === "auto") return voice.startsWith("ru-") ? "cmu" : "whole"
+      if (
+        requested === "hybrid" ||
+        requested === "transliterate" ||
+        requested === "whole" ||
+        requested === "cmu"
+      ) {
+        return requested
+      }
+      return voice.startsWith("ru-") ? "cmu" : "whole"
+    }
+
     function audioFor(sessionID: string, overrides: Partial<AudioOptions> = {}): AudioOptions {
       const variant = sessionVoice(sessionID)
-      const strategy = String(overrides.strategy ?? options.strategy).toLowerCase()
+      const voice = String(overrides.voiceRu ?? variant.voice)
+      const strategy = resolveStrategy(String(overrides.strategy ?? options.strategy).toLowerCase(), voice)
       return {
         ...audioOptions,
-        voiceRu: variant.voice,
-        voiceEn: variant.voice,
+        voiceRu: voice,
+        voiceEn: String(overrides.voiceEn ?? voice),
         rate: variant.rate,
         pitch: variant.pitch,
         ...overrides,
-        strategy:
-          strategy === "hybrid" || strategy === "transliterate" || strategy === "whole" || strategy === "cmu"
-            ? strategy
-            : options.strategy,
+        strategy,
       }
     }
 
@@ -668,8 +683,9 @@ export default {
               },
               strategy: {
                 type: "string",
-                enum: ["whole", "cmu", "transliterate"],
-                description: "Text shaping strategy. Default: the plugin's configured strategy (cmu).",
+                enum: ["auto", "whole", "cmu", "transliterate"],
+                description:
+                  "Text shaping strategy. Default: auto (native Russian voice → cmu, multilingual voice → whole).",
               },
               wait: {
                 type: "boolean",

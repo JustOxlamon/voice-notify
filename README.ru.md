@@ -148,7 +148,7 @@ opencode plugin list
     {
       "package": "file:///C:/Users/<you>/.config/opencode/plugins/voice-notify",
       "options": {
-        "strategy": "cmu",
+        "strategy": "auto",
         "voicePool": [
           "ru-RU-SvetlanaNeural",
           "en-US-AvaMultilingualNeural",
@@ -194,7 +194,7 @@ opencode plugin list
 
 | Опция | По умолчанию | Значение |
 |---|---|---|
-| `strategy` | `cmu` | `cmu` — русский + CMU-транскрипция; `whole` — читать как написано; `transliterate` — небольшой словарь терминов. |
+| `strategy` | `auto` | `auto` — native RU-голос → `cmu`, мультиязычный → `whole`; либо принудительно `cmu`/`whole`/`transliterate`. |
 | `voicePool` | Svetlana, Ava, Seraphina | Голоса для стабильного выбора на сессию. |
 | `voiceVariants` | `true` | Выбирать rate-пресет на сессию; `false` — использовать `rate`/`pitch`. |
 | `events` | success, failed, interrupted, question, permission, subagent | Какие события озвучивать. Можно добавить `retry`. |
@@ -224,11 +224,20 @@ opencode plugin list
 
 ### Стратегии
 
-- `cmu` (по умолчанию) — русский текст читается как есть; английские куски
-  переводятся через CMUdict: `OpenCode API` → `оупенкоуд эй пи ай`. Без
-  искусственных знаков ударения.
-- `whole` — голос читает исходный текст, включая латиницу.
+- `auto` (по умолчанию) — с учётом голоса:
+  - native `ru-*` голос (Svetlana) получает CMU-транскрипцию, английский
+    читается кириллицей: `OpenCode API` → `оупенкоуд эй пи ай`;
+  - мультиязычный голос (Ava/Seraphina) получает исходный текст, поэтому
+    английский читается нативно, а русский — с лёгким акцентом.
+- `cmu` — принудительная CMU-транскрипция для любого голоса. С Ava/Seraphina
+  это обычно плохой выбор: они получают кириллическую транслитерацию
+  английских слов и читают её с русским акцентом.
+- `whole` — читать исходный текст как есть.
 - `transliterate` — один голос плюс небольшой словарь английских терминов.
+
+Если английский на Ava/Seraphina звучал плохо, значит к мультиязычному голосу
+применялась стратегия `cmu`. `auto` исправляет это, переключая такие голоса на
+`whole`.
 
 ## Тул `speak`
 
@@ -241,7 +250,7 @@ opencode plugin list
   "text": "Проверка инструмента Speak. OpenCode API.",
   "voice": "en-US-AvaMultilingualNeural",
   "variant": 3,
-  "strategy": "cmu",
+  "strategy": "auto",
   "wait": true
 }
 ```
@@ -250,7 +259,7 @@ opencode plugin list
 - `voice` — опционально, один из `voicePool`; по умолчанию голос сессии.
 - `variant` — опционально 0..7, rate-пресет.
 - `rate` / `pitch` — ручные переопределения.
-- `strategy` — `whole`, `cmu` или `transliterate`.
+- `strategy` — `auto` (по умолчанию), `whole`, `cmu` или `transliterate`.
 - `wait` — дождаться окончания проигрывания.
 
 Возвращает `Speech played.`, `Speech queued.` или `Speech failed: ...`.
@@ -262,7 +271,8 @@ opencode plugin list
 
 1. Серверный плагин подписывается на `ctx.event.subscribe`.
 2. Получает сессию, проверяет `parentID` и собирает фразу из шаблона.
-3. В `cmu` английские куски переводятся в русскую практическую транскрипцию.
+3. `auto` выбирает `cmu` для native-русских голосов и `whole` для мультиязычных;
+   в `cmu` английские куски переводятся в русскую практическую транскрипцию.
 4. edge-tts синтезирует клип; ffmpeg обрезает/склеивает; ffplay играет.
 5. Очередь с приоритетами сериализует речь. Вопросы, разрешения и ошибки
    обгоняют обычные завершения.

@@ -136049,7 +136049,7 @@ var DEFAULT_VOICE_POOL = [
   "de-DE-SeraphinaMultilingualNeural"
 ];
 var DEFAULTS = {
-  strategy: "cmu",
+  strategy: "auto",
   voiceRu: "ru-RU-SvetlanaNeural",
   voiceEn: "ru-RU-SvetlanaNeural",
   voicePool: DEFAULT_VOICE_POOL,
@@ -136114,11 +136114,11 @@ function normalizeOptions(raw) {
     return value === void 0 ? DEFAULTS[key] : value;
   };
   const events = Array.isArray(input.events) ? input.events.map((value) => String(value).toLowerCase()) : DEFAULTS.events;
-  const strategy = String(pick("strategy") ?? "cmu").toLowerCase();
+  const strategy = String(pick("strategy") ?? "auto").toLowerCase();
   const voicePoolRaw = Array.isArray(input.voicePool) ? input.voicePool.map((value) => String(value).trim()).filter(Boolean) : DEFAULTS.voicePool;
   const voicePool = voicePoolRaw.length > 0 ? voicePoolRaw : DEFAULTS.voicePool;
   return {
-    strategy: strategy === "hybrid" || strategy === "transliterate" || strategy === "whole" || strategy === "cmu" ? strategy : "cmu",
+    strategy: strategy === "auto" || strategy === "hybrid" || strategy === "transliterate" || strategy === "whole" || strategy === "cmu" ? strategy : "auto",
     voiceRu: String(pick("voiceRu")),
     voiceEn: String(pick("voiceEn")),
     voicePool,
@@ -136217,17 +136217,25 @@ var index_default = {
       const variant = options.voiceVariants ? VOICE_VARIANTS[hashSession(`rate:${sessionID}`) % VOICE_VARIANTS.length] : { rate: options.rate, pitch: options.pitch };
       return { voice, rate: variant.rate, pitch: variant.pitch };
     }
+    function resolveStrategy(requested, voice) {
+      if (requested === "auto") return voice.startsWith("ru-") ? "cmu" : "whole";
+      if (requested === "hybrid" || requested === "transliterate" || requested === "whole" || requested === "cmu") {
+        return requested;
+      }
+      return voice.startsWith("ru-") ? "cmu" : "whole";
+    }
     function audioFor(sessionID, overrides = {}) {
       const variant = sessionVoice(sessionID);
-      const strategy = String(overrides.strategy ?? options.strategy).toLowerCase();
+      const voice = String(overrides.voiceRu ?? variant.voice);
+      const strategy = resolveStrategy(String(overrides.strategy ?? options.strategy).toLowerCase(), voice);
       return {
         ...audioOptions,
-        voiceRu: variant.voice,
-        voiceEn: variant.voice,
+        voiceRu: voice,
+        voiceEn: String(overrides.voiceEn ?? voice),
         rate: variant.rate,
         pitch: variant.pitch,
         ...overrides,
-        strategy: strategy === "hybrid" || strategy === "transliterate" || strategy === "whole" || strategy === "cmu" ? strategy : options.strategy
+        strategy
       };
     }
     function recentlyPlayed(lockKey) {
@@ -136550,8 +136558,8 @@ var index_default = {
               },
               strategy: {
                 type: "string",
-                enum: ["whole", "cmu", "transliterate"],
-                description: "Text shaping strategy. Default: the plugin's configured strategy (cmu)."
+                enum: ["auto", "whole", "cmu", "transliterate"],
+                description: "Text shaping strategy. Default: auto (native Russian voice \u2192 cmu, multilingual voice \u2192 whole)."
               },
               wait: {
                 type: "boolean",

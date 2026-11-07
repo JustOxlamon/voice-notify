@@ -146,7 +146,7 @@ plugin entry to `~/.config/opencode/opencode.jsonc` (or the project config):
     {
       "package": "file:///C:/Users/<you>/.config/opencode/plugins/voice-notify",
       "options": {
-        "strategy": "cmu",
+        "strategy": "auto",
         "voicePool": [
           "ru-RU-SvetlanaNeural",
           "en-US-AvaMultilingualNeural",
@@ -192,7 +192,7 @@ options; OpenCode deduplicates the target.
 
 | Option | Default | Meaning |
 |---|---|---|
-| `strategy` | `cmu` | `cmu` — Russian + CMU practical transcription; `whole` — read exactly as written; `transliterate` — small tech dictionary. |
+| `strategy` | `auto` | `auto` — native RU voice → `cmu`, multilingual voice → `whole`; or force `cmu`/`whole`/`transliterate`. |
 | `voicePool` | Svetlana, Ava, Seraphina | Voices used for the stable per-session selection. |
 | `voiceVariants` | `true` | Pick a rate preset per session; `false` uses `rate`/`pitch`. |
 | `events` | success, failed, interrupted, question, permission, subagent | Events to voice. Add `retry` if wanted. |
@@ -222,10 +222,20 @@ To use only Svetlana:
 
 ### Strategies
 
-- `cmu` (default) — Russian text is read as-is; English runs are converted with
-  CMUdict: `OpenCode API` → `оупенкоуд эй пи ай`. No artificial stress marks.
-- `whole` — the voice reads the original text, including Latin words.
+- `auto` (default) — voice-aware:
+  - a native `ru-*` voice (Svetlana) gets CMU practical transcription, so
+    English is read as Cyrillic: `OpenCode API` → `оупенкоуд эй пи ай`;
+  - a multilingual voice (Ava/Seraphina) gets the original text, so English is
+    read natively and Russian keeps its light accent.
+- `cmu` — force CMU practical transcription for any voice. With Ava/Seraphina
+  this is usually the wrong choice: they receive Cyrillic transliteration of
+  English words and read it with a Russian accent.
+- `whole` — read the original text exactly as written.
 - `transliterate` — one voice plus a small English-tech dictionary.
+
+If English sounded bad on Ava/Seraphina, it was because `cmu` was applied to a
+multilingual voice. `auto` fixes that by switching multilingual voices to
+`whole`.
 
 ## `speak` tool
 
@@ -239,7 +249,7 @@ Input:
   "text": "Проверка инструмента Speak. OpenCode API.",
   "voice": "en-US-AvaMultilingualNeural",
   "variant": 3,
-  "strategy": "cmu",
+  "strategy": "auto",
   "wait": true
 }
 ```
@@ -248,7 +258,7 @@ Input:
 - `voice` — optional, one of `voicePool`; default is the session's stable voice.
 - `variant` — optional 0..7 rate preset.
 - `rate` / `pitch` — optional manual overrides.
-- `strategy` — `whole`, `cmu`, or `transliterate`.
+- `strategy` — `auto` (default), `whole`, `cmu`, or `transliterate`.
 - `wait` — wait for playback before returning.
 
 Returns `Speech played.`, `Speech queued.`, or `Speech failed: ...`.
@@ -261,7 +271,8 @@ the model does not read the same thing twice.
 1. The server plugin subscribes to `ctx.event.subscribe`.
 2. It resolves the session, checks `parentID`, and builds the phrase from the
    template.
-3. `cmu` applies CMUdict practical transcription to English runs.
+3. `auto` selects `cmu` for native Russian voices and `whole` for multilingual
+   voices; `cmu` applies CMUdict practical transcription to English runs.
 4. edge-tts synthesizes a clip; ffmpeg trims/concats; ffplay plays it.
 5. A priority queue serializes speech. Questions, permissions, and failures jump
    ahead of ordinary completions.
