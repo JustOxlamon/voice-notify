@@ -1,7 +1,13 @@
 # Voice examples
 
-Short demo clips generated with `edge-tts` 7.3.1 and the Microsoft voice
-`ru-RU-SvetlanaNeural` (rate `+0%`, pitch `+0Hz`).
+Short demo clips generated with `edge-tts` 7.3.1 and three Microsoft voices:
+
+- `ru-RU-SvetlanaNeural` (native Russian)
+- `en-US-AvaMultilingualNeural` (multilingual)
+- `de-DE-SeraphinaMultilingualNeural` (multilingual)
+
+Rate `+0%`, pitch `+0Hz`. Each clip introduces its own voice, so Ava says
+"Это Ава" and Seraphina says "Это Серафина".
 
 | Voice | Default `auto` | Forced comparison |
 |---|---|---|
@@ -21,9 +27,10 @@ Russian-accented.
 
 ## Voice source and license
 
-Svetlana is a **Microsoft Edge neural TTS voice**. The audio was generated through
-the unofficial [`edge-tts`](https://github.com/rany2/edge-tts) Python client,
-which uses Microsoft's online TTS service.
+Svetlana, Ava, and Seraphina are **Microsoft Edge neural TTS voices**. The audio
+was generated through the unofficial
+[`edge-tts`](https://github.com/rany2/edge-tts) Python client, which uses
+Microsoft's online TTS service.
 
 - The plugin code is MIT — see [`../LICENSE`](../LICENSE).
 - The voice and generated audio belong to Microsoft; these clips are provided
@@ -57,8 +64,15 @@ The `*-cmu-forced` clips use the `*-cmu-forced.txt` transcripts; the
 
 # Примеры голоса
 
-Короткие демонстрационные клипы, сгенерированные `edge-tts` 7.3.1 голосом
-Microsoft `ru-RU-SvetlanaNeural` (rate `+0%`, pitch `+0Hz`).
+Короткие демонстрационные клипы, сгенерированные `edge-tts` 7.3.1 и тремя
+голосами Microsoft:
+
+- `ru-RU-SvetlanaNeural` — native-русский;
+- `en-US-AvaMultilingualNeural` — мультиязычный;
+- `de-DE-SeraphinaMultilingualNeural` — мультиязычный.
+
+Rate `+0%`, pitch `+0Hz`. Каждый клип представляет свой голос: Ава говорит
+«Это Ава», Серафина — «Это Серафина».
 
 | Голос | Дефолт `auto` | Принудительное сравнение |
 |---|---|---|

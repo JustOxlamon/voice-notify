@@ -31,7 +31,7 @@ Short demos are in [`examples/`](examples/README.md):
 - Ava: [auto](examples/ava-auto.mp3), [forced CMU](examples/ava-cmu-forced.mp3)
 - Seraphina: [auto](examples/seraphina-auto.mp3), [forced CMU](examples/seraphina-cmu-forced.mp3)
 
-Svetlana is a Microsoft Edge TTS voice; see
+The voices are Microsoft Edge TTS voices; see
 [`examples/README.md`](examples/README.md) for the source and licensing notes.
 
 ## Requirements

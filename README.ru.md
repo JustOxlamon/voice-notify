@@ -31,7 +31,7 @@
 - Ava: [auto](examples/ava-auto.mp3), [принудительный CMU](examples/ava-cmu-forced.mp3)
 - Seraphina: [auto](examples/seraphina-auto.mp3), [принудительный CMU](examples/seraphina-cmu-forced.mp3)
 
-Svetlana — голос Microsoft Edge TTS; источник и лицензионные пометки — в
+Все три голоса — Microsoft Edge TTS; источник и лицензионные пометки — в
 [`examples/README.md`](examples/README.md).
 
 ## Требования
