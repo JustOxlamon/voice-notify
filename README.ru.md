@@ -23,6 +23,16 @@
 - Проверено на Windows; работает на macOS/Linux с `ffmpeg`/`ffplay`. SAPI-fallback
   только для Windows.
 
+## Примеры голоса
+
+Короткие демо лежат в [`examples/`](examples/README.md):
+
+- [Svetlana читает исходный текст](examples/svetlana-raw.mp3)
+- [Svetlana с CMU-транскрипцией](examples/svetlana-plugin-cmu.mp3)
+
+Svetlana — голос Microsoft Edge TTS; источник и лицензионные пометки — в
+[`examples/README.md`](examples/README.md).
+
 ## Требования
 
 - OpenCode **V2** (проверено на 2.2.x).

@@ -23,6 +23,16 @@ questions and permission requests, announces subagent completion, and exposes a
 - Tested on Windows; works on macOS/Linux with `ffmpeg`/`ffplay`. SAPI fallback
   is Windows-only.
 
+## Voice examples
+
+Short demos are in [`examples/`](examples/README.md):
+
+- [Svetlana reading the original text](examples/svetlana-raw.mp3)
+- [Svetlana with CMU practical transcription](examples/svetlana-plugin-cmu.mp3)
+
+Svetlana is a Microsoft Edge TTS voice; see
+[`examples/README.md`](examples/README.md) for the source and licensing notes.
+
 ## Requirements
 
 - OpenCode **V2** (tested with 2.2.x).
