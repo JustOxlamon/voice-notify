@@ -1,0 +1,14 @@
+# generated speech cache and locks
+cache/
+*.lock
+last-play.json
+
+# local tooling
+node_modules/
+.deps/
+
+# logs and editor files
+*.log
+*.tmp
+.DS_Store
+Thumbs.db
