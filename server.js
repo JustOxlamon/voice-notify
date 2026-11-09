@@ -136735,7 +136735,7 @@ var index_default = {
       const toolRegistration = await ctx.tool.transform((editor) => {
         editor.add({
           name: "speak",
-          description: "Read text aloud through the local speakers using one of the configured Russian-capable voices (Svetlana, Ava, Seraphina). Use when the user explicitly asks you to say, read, or announce something out loud. Do not use it for every reply. English words are transliterated by default.",
+          description: "Read text aloud through the local speakers using one of the configured Russian-capable voices from the current voice pool. Use when the user explicitly asks you to say, read, or announce something out loud. Do not use it for every reply. English words are transliterated by default.",
           input: {
             type: "object",
             properties: {
@@ -136745,8 +136745,7 @@ var index_default = {
               },
               voice: {
                 type: "string",
-                enum: options.voicePool,
-                description: "Optional voice from the configured pool. Default: the session's stable voice."
+                description: "Optional voice from the current pool. Default: the session's stable voice. An unknown name falls back to the session voice."
               },
               variant: {
                 type: "integer",
