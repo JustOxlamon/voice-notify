@@ -11,6 +11,7 @@ import fs from "node:fs"
 import path from "node:path"
 import {
   CACHE_DIR,
+  PLUGIN_DIR,
   cacheKey,
   cachedFile,
   defaultFfmpeg,
@@ -23,6 +24,14 @@ import {
   synthesize,
 } from "./audio.ts"
 import type { AudioOptions } from "./audio.ts"
+import {
+  DEFAULT_VOICES,
+  VOICE_NOTIFY_EVENTS,
+  VoiceNotifyRpc,
+  type VoiceNotifyEvent,
+  type VoiceNotifySettings,
+  type VoiceNotifyStrategy,
+} from "./rpc.ts"
 import { basename, preprocess, shapeForStrategy, type Segment, type Strategy } from "./speech.ts"
 
 type Kind = "success" | "failed" | "interrupted" | "question" | "permission" | "subagent" | "retry"
@@ -53,11 +62,7 @@ type Options = {
   ffplay: string
 }
 
-const DEFAULT_VOICE_POOL = [
-  "ru-RU-SvetlanaNeural",
-  "en-US-AvaMultilingualNeural",
-  "de-DE-SeraphinaMultilingualNeural",
-]
+const DEFAULT_VOICE_POOL = [...DEFAULT_VOICES]
 
 const DEFAULTS: Options = {
   strategy: "auto",
@@ -187,6 +192,68 @@ function toAudioOptions(options: Options) {
   }
 }
 
+const SETTINGS_FILE = path.join(PLUGIN_DIR, "settings.json")
+
+const KIND_FOR_EVENT: Record<string, VoiceNotifyEvent> = Object.fromEntries(
+  Object.entries(KINDS).map(([kind, event]) => [event, kind as VoiceNotifyEvent]),
+)
+
+function eventKind(value: unknown): VoiceNotifyEvent | undefined {
+  const text = String(value ?? "").trim()
+  if (!text) return undefined
+  const lower = text.toLowerCase()
+  if ((VOICE_NOTIFY_EVENTS as readonly string[]).includes(lower)) return lower as VoiceNotifyEvent
+  return KIND_FOR_EVENT[text] ?? KIND_FOR_EVENT[lower]
+}
+
+/** The user-facing subset of the internal options. */
+function settingsFrom(options: Options): VoiceNotifySettings {
+  const events = [
+    ...new Set(
+      options.events
+        .map(eventKind)
+        .filter((value): value is VoiceNotifyEvent => value !== undefined),
+    ),
+  ]
+  return {
+    events: events.length > 0 ? events : [...DEFAULTS.events] as VoiceNotifyEvent[],
+    subagents: options.subagents,
+    voicePool: [...options.voicePool],
+    voiceVariants: options.voiceVariants,
+    rate: options.rate,
+    volume: options.volume,
+    fallbackSapi: options.fallbackSapi,
+    strategy: options.strategy as VoiceNotifyStrategy,
+    template: options.template,
+    templateFailed: options.templateFailed,
+    templateInterrupted: options.templateInterrupted,
+    templateQuestion: options.templateQuestion,
+    templatePermission: options.templatePermission,
+    templateSubagent: options.templateSubagent,
+    templateRetry: options.templateRetry,
+    maxTitleChars: options.maxTitleChars,
+    maxToolChars: options.maxToolChars,
+  }
+}
+
+function readSettingsFile(): Record<string, unknown> {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(SETTINGS_FILE, "utf8")) as unknown
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {}
+    return parsed as Record<string, unknown>
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException | undefined)?.code
+    if (code !== "ENOENT") console.warn("[voice-notify] could not read settings.json", error)
+    return {}
+  }
+}
+
+function writeSettingsFile(settings: VoiceNotifySettings) {
+  const temp = `${SETTINGS_FILE}.tmp`
+  fs.writeFileSync(temp, `${JSON.stringify(settings, null, 2)}\n`, "utf8")
+  fs.renameSync(temp, SETTINGS_FILE)
+}
+
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
   if (ms <= 0) return promise
   return new Promise<T>((resolve, reject) => {
@@ -222,8 +289,10 @@ export default {
   async setup(ctx: any) {
     if (!ctx || typeof ctx.event?.subscribe !== "function") return () => {}
 
-    const options = normalizeOptions(ctx.options)
-    const audioOptions = toAudioOptions(options)
+    const rawOptions = (ctx.options ?? {}) as Record<string, unknown>
+    const savedSettings = readSettingsFile()
+    let options = normalizeOptions({ ...rawOptions, ...savedSettings })
+    let audioOptions = toAudioOptions(options)
     const cleanups: Array<() => void | Promise<void>> = []
     const inflight = new Map<string, Promise<string>>()
     const debounces = new Map<string, ReturnType<typeof setTimeout>>()
@@ -289,6 +358,31 @@ export default {
         ...overrides,
         strategy,
       }
+    }
+
+    function currentSettings(): VoiceNotifySettings {
+      return settingsFrom(options)
+    }
+
+    function applySettings(patch: Partial<VoiceNotifySettings>): VoiceNotifySettings {
+      const next = normalizeOptions({ ...options, ...(patch ?? {}) })
+      const publicNext = settingsFrom(next)
+      writeSettingsFile(publicNext)
+      options = next
+      audioOptions = toAudioOptions(next)
+      return publicNext
+    }
+
+    function resetSettings(): VoiceNotifySettings {
+      try {
+        fs.unlinkSync(SETTINGS_FILE)
+      } catch (error) {
+        const code = (error as NodeJS.ErrnoException | undefined)?.code
+        if (code !== "ENOENT") throw error
+      }
+      options = normalizeOptions(rawOptions)
+      audioOptions = toAudioOptions(options)
+      return currentSettings()
     }
 
     function recentlyPlayed(lockKey: string): boolean {
@@ -645,6 +739,45 @@ export default {
       toolSpoken.set(sessionID, Date.now())
       const ok = await enqueue(text, segments, key, lockKey, 2, audio, wait, 20000)
       return { ok, played: wait && ok, ...(ok ? {} : { error: "not queued" }) }
+    }
+
+    if (ctx.rpc && typeof ctx.rpc.register === "function") {
+      try {
+        const rpcRegistration = await ctx.rpc.register(VoiceNotifyRpc, {
+          get: async () => currentSettings(),
+          update: async (input: any) => applySettings((input ?? {}) as Partial<VoiceNotifySettings>),
+          reset: async () => resetSettings(),
+          test: async (input: any) => {
+            const text =
+              String(input?.text ?? "").trim() ||
+              "Привет! Это проверка голоса Voice Notify."
+            const voice =
+              typeof input?.voice === "string" && input.voice.trim()
+                ? input.voice.trim()
+                : undefined
+            const overrides: Partial<AudioOptions> = {}
+            if (voice) {
+              overrides.voiceRu = voice
+              overrides.voiceEn = voice
+            }
+            try {
+              const result = await speakText(text, "settings-test", overrides, false)
+              return {
+                ok: result.ok,
+                queued: result.ok,
+                ...(result.ok ? {} : { error: result.error ?? "not queued" }),
+              }
+            } catch (error) {
+              return { ok: false, queued: false, error: String(error) }
+            }
+          },
+        })
+        if (rpcRegistration && typeof rpcRegistration.dispose === "function") {
+          cleanups.push(() => rpcRegistration.dispose())
+        }
+      } catch (error) {
+        console.warn("[voice-notify] settings RPC registration failed", error)
+      }
     }
 
     try {

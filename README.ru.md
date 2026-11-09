@@ -18,6 +18,8 @@
 - Стабильный темп на сессию, без роботизированных pitch-сдвигов.
 - Одна очередь с приоритетами: фразы не накладываются друг на друга.
 - Тул `speak`: модель может прочитать произвольный текст по запросу.
+- Экран настроек в TUI: `/voice-notify` (или Ctrl+P) — события, голоса,
+  громкость, темп, шаблоны, SAPI-fallback и проверка голоса.
 - Ретраи edge-tts, сериализация синтеза, кэш на диске и опциональный SAPI-fallback
   (по умолчанию выключен).
 - Проверено на Windows; работает на macOS/Linux с `ffmpeg`/`ffplay`. SAPI-fallback
@@ -136,11 +138,29 @@ opencode plugin list
 
 Модель вызовет тул `speak`.
 
+### 7. Открой экран настроек
+
+Выполни в TUI `/voice-notify` или нажми `Ctrl+P` и выбери **Voice Notify:
+настройки**. Экран позволяет менять:
+
+- какие события озвучивать;
+- пул голосов (добавлять и убирать голоса edge-tts);
+- разные голоса по сессиям, темп и громкость;
+- SAPI-fallback и стратегию текста;
+- шаблоны фраз и лимиты длины;
+- тестовую фразу.
+
+Значения сохраняются в `settings.json` рядом с плагином и применяются сразу.
+`settings.json` локальный и не попадает в git. Встроенный `/settings` в OpenCode —
+статический список ядра, плагины не могут добавлять туда строки; `/voice-notify`
+— поддерживаемый аналог на уровне плагина.
+
 ## Настройка
 
-Значения по умолчанию лежат в `index.ts`. Чтобы переопределить их без сборки,
-добавь явную запись плагина в `~/.config/opencode/opencode.jsonc` (или в конфиг
-проекта):
+Значения по умолчанию лежат в `index.ts`. Экран настроек TUI пишет
+`settings.json`, который переопределяет значения ниже. Чтобы задать defaults без
+UI, добавь явную запись плагина в `~/.config/opencode/opencode.jsonc` (или в
+конфиг проекта):
 
 ```jsonc
 {
@@ -287,13 +307,16 @@ opencode plugin list
 ## Сборка из исходников
 
 `server.js` уже собран и готов к использованию. После правок `index.ts`,
-`audio.ts`, `speech.ts` или `cmu.ts`:
+`rpc.ts`, `audio.ts`, `speech.ts` или `cmu.ts`:
 
 ```sh
 cd ~/.config/opencode/plugins/voice-notify
 npx esbuild index.ts --bundle --platform=node --format=esm --outfile=server.js
 opencode reload
 ```
+
+`tui.ts` загружается TUI OpenCode напрямую и отдельной сборки не требует.
+`rpc.ts` — общий контракт; он попадает в `server.js` при сборке.
 
 `vendor/cmudict.js` — данные `cmu-pronouncing-dictionary` 3.0.0 (134k английских
 слов, ARPAbet, ISC/public domain; см. `vendor/cmudict-license.txt`).
@@ -306,6 +329,12 @@ opencode reload
 - `opencode service status` должен быть в порядке.
 - `python -m edge_tts --version` и `ffplay -version`.
 - Смотри `~/.local/share/opencode/log/opencode.log` на ошибки `voice-notify`.
+
+**`/voice-notify` нет в палитре команд**
+
+- `opencode plugin list` должен показывать `voice-notify`.
+- Выполни `opencode reload`, затем перезапусти TUI, если он уже был открыт.
+- Проверь лог на ошибки загрузки TUI-части `voice-notify`.
 
 **Говорит Microsoft Irina**
 
@@ -337,11 +366,14 @@ edge-tts зависит от сети. Плагин прогревает фра�
 ## Структура репозитория
 
 ```text
-index.ts                 исходник плагина
+index.ts                 исходник серверного плагина
+rpc.ts                   общий контракт сервера и TUI
+tui.ts                   экран настроек `/voice-notify`
 audio.ts                 edge-tts, ffmpeg, ffplay, кэш, SAPI-fallback
 speech.ts                очистка текста, разбиение, транслитерация
 cmu.ts                   CMUdict-транскрипция
 server.js                готовый бандл для OpenCode
+settings.json            локальные переопределения (игнорируется git)
 vendor/cmudict.js        CMU pronouncing dictionary
 vendor/cmudict-license.txt
 assets/silence.mp3       заглушка встроенных done-блипов

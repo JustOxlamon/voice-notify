@@ -18,6 +18,8 @@ questions and permission requests, announces subagent completion, and exposes a
 - Per-session speaking-rate preset, no robotic pitch shifts.
 - One speech queue with priorities; phrases never overlap.
 - `speak` tool: the model can read arbitrary text on demand.
+- TUI settings screen: run `/voice-notify` (or use Ctrl+P) to change events,
+  voices, volume, rate, templates, SAPI fallback, and play a test phrase.
 - edge-tts retries, serialized synthesis, on-disk cache, and optional SAPI
   fallback (off by default).
 - Tested on Windows; works on macOS/Linux with `ffmpeg`/`ffplay`. SAPI fallback
@@ -135,9 +137,27 @@ Finish a turn and listen, or ask the model:
 
 The model will call the `speak` tool.
 
+### 7. Open the settings screen
+
+Run `/voice-notify` in the TUI, or press `Ctrl+P` and choose **Voice Notify:
+настройки**. The screen covers:
+
+- which events are announced;
+- the voice pool (add or remove edge-tts voices);
+- per-session voice variation, rate, and volume;
+- SAPI fallback and text strategy;
+- announcement templates and length limits;
+- a test phrase.
+
+Values are saved to `settings.json` next to the plugin and applied immediately.
+`settings.json` is local and ignored by git. The built-in OpenCode `/settings`
+dialog is a static core list, so plugins cannot add rows to it; `/voice-notify`
+is the supported plugin-level equivalent.
+
 ## Configuration
 
-Defaults live in `index.ts`. To override them without rebuilding, add an explicit
+Defaults live in `index.ts`. The TUI settings screen writes `settings.json`,
+which overrides the values below. To set defaults without the UI, add an explicit
 plugin entry to `~/.config/opencode/opencode.jsonc` (or the project config):
 
 ```jsonc
@@ -286,14 +306,17 @@ play audio on the remote host, not on the client.
 
 ## Build from source
 
-`server.js` is committed and ready to use. After editing `index.ts`, `audio.ts`,
-`speech.ts`, or `cmu.ts`:
+`server.js` is committed and ready to use. After editing `index.ts`, `rpc.ts`,
+`audio.ts`, `speech.ts`, or `cmu.ts`:
 
 ```sh
 cd ~/.config/opencode/plugins/voice-notify
 npx esbuild index.ts --bundle --platform=node --format=esm --outfile=server.js
 opencode reload
 ```
+
+`tui.ts` is loaded directly by the OpenCode TUI, so it does not need a separate
+build. `rpc.ts` is the shared contract and is bundled into `server.js`.
 
 `vendor/cmudict.js` is the `cmu-pronouncing-dictionary` 3.0.0 data (134k English
 words, ARPAbet, ISC/public domain; see `vendor/cmudict-license.txt`).
@@ -306,6 +329,12 @@ words, ARPAbet, ISC/public domain; see `vendor/cmudict-license.txt`).
 - `opencode service status` should be healthy.
 - `python -m edge_tts --version` and `ffplay -version`.
 - Check `~/.local/share/opencode/log/opencode.log` for `voice-notify` errors.
+
+**`/voice-notify` is not in the command palette**
+
+- `opencode plugin list` should show `voice-notify`.
+- Run `opencode reload`, then reopen the TUI if it was already running.
+- Check the log for `voice-notify` TUI load errors.
 
 **It speaks with Microsoft Irina**
 
@@ -337,11 +366,14 @@ the first synthesis can take 2–5 seconds.
 ## Repository layout
 
 ```text
-index.ts                 plugin source
+index.ts                 server plugin source
+rpc.ts                   shared server/TUI settings contract
+tui.ts                   `/voice-notify` settings screen
 audio.ts                 edge-tts, ffmpeg, ffplay, cache, SAPI fallback
 speech.ts                text cleanup, splitting, transliteration
 cmu.ts                   CMUdict practical transcription
 server.js                prebuilt bundle loaded by OpenCode
+settings.json            local UI overrides (ignored by git)
 vendor/cmudict.js        CMU pronouncing dictionary
 vendor/cmudict-license.txt
 assets/silence.mp3       silences the built-in done blips

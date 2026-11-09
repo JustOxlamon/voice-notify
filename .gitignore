@@ -3,6 +3,10 @@ cache/
 *.lock
 last-play.json
 
+# user settings written from the TUI
+settings.json
+settings.json.tmp
+
 # local tooling
 node_modules/
 .deps/

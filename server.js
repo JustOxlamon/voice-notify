@@ -425,6 +425,105 @@ async function speakSapi(options, text) {
   });
 }
 
+// rpc.ts
+var VOICE_NOTIFY_EVENTS = [
+  "success",
+  "failed",
+  "interrupted",
+  "question",
+  "permission",
+  "subagent",
+  "retry"
+];
+var DEFAULT_VOICES = [
+  "ru-RU-SvetlanaNeural",
+  "en-US-AvaMultilingualNeural",
+  "de-DE-SeraphinaMultilingualNeural"
+];
+var settingsProperties = {
+  events: {
+    type: "array",
+    items: { type: "string", enum: [...VOICE_NOTIFY_EVENTS] },
+    uniqueItems: true
+  },
+  subagents: { type: "boolean" },
+  voicePool: { type: "array", items: { type: "string" }, minItems: 1 },
+  voiceVariants: { type: "boolean" },
+  rate: { type: "string" },
+  volume: { type: "number", minimum: 0, maximum: 1 },
+  fallbackSapi: { type: "boolean" },
+  strategy: {
+    type: "string",
+    enum: ["auto", "whole", "hybrid", "transliterate", "cmu"]
+  },
+  template: { type: "string" },
+  templateFailed: { type: "string" },
+  templateInterrupted: { type: "string" },
+  templateQuestion: { type: "string" },
+  templatePermission: { type: "string" },
+  templateSubagent: { type: "string" },
+  templateRetry: { type: "string" },
+  maxTitleChars: { type: "integer", minimum: 20 },
+  maxToolChars: { type: "integer", minimum: 100 }
+};
+var settingsRequired = Object.keys(settingsProperties);
+var SettingsSchema = {
+  type: "object",
+  properties: settingsProperties,
+  required: settingsRequired,
+  additionalProperties: false
+};
+var SettingsPatchSchema = {
+  type: "object",
+  properties: settingsProperties,
+  additionalProperties: false
+};
+var EmptyInputSchema = {
+  type: "object",
+  properties: {},
+  additionalProperties: false
+};
+var TestInputSchema = {
+  type: "object",
+  properties: {
+    text: { type: "string" },
+    voice: { type: "string" }
+  },
+  additionalProperties: false
+};
+var TestOutputSchema = {
+  type: "object",
+  properties: {
+    ok: { type: "boolean" },
+    queued: { type: "boolean" },
+    error: { type: "string" }
+  },
+  required: ["ok", "queued"],
+  additionalProperties: false
+};
+var VoiceNotifyRpc = {
+  id: "voice-notify",
+  methods: {
+    get: {
+      input: EmptyInputSchema,
+      output: SettingsSchema
+    },
+    update: {
+      input: SettingsPatchSchema,
+      output: SettingsSchema
+    },
+    test: {
+      input: TestInputSchema,
+      output: TestOutputSchema
+    },
+    reset: {
+      input: EmptyInputSchema,
+      output: SettingsSchema
+    }
+  },
+  events: {}
+};
+
 // vendor/cmudict.js
 var dictionary = {
   "'bout": "B AW1 T",
@@ -136043,11 +136142,7 @@ function basename(input) {
 }
 
 // index.ts
-var DEFAULT_VOICE_POOL = [
-  "ru-RU-SvetlanaNeural",
-  "en-US-AvaMultilingualNeural",
-  "de-DE-SeraphinaMultilingualNeural"
-];
+var DEFAULT_VOICE_POOL = [...DEFAULT_VOICES];
 var DEFAULTS = {
   strategy: "auto",
   voiceRu: "ru-RU-SvetlanaNeural",
@@ -136157,6 +136252,60 @@ function toAudioOptions(options) {
     strategy: options.strategy
   };
 }
+var SETTINGS_FILE = path2.join(PLUGIN_DIR, "settings.json");
+var KIND_FOR_EVENT = Object.fromEntries(
+  Object.entries(KINDS).map(([kind, event]) => [event, kind])
+);
+function eventKind(value) {
+  const text = String(value ?? "").trim();
+  if (!text) return void 0;
+  const lower = text.toLowerCase();
+  if (VOICE_NOTIFY_EVENTS.includes(lower)) return lower;
+  return KIND_FOR_EVENT[text] ?? KIND_FOR_EVENT[lower];
+}
+function settingsFrom(options) {
+  const events = [
+    ...new Set(
+      options.events.map(eventKind).filter((value) => value !== void 0)
+    )
+  ];
+  return {
+    events: events.length > 0 ? events : [...DEFAULTS.events],
+    subagents: options.subagents,
+    voicePool: [...options.voicePool],
+    voiceVariants: options.voiceVariants,
+    rate: options.rate,
+    volume: options.volume,
+    fallbackSapi: options.fallbackSapi,
+    strategy: options.strategy,
+    template: options.template,
+    templateFailed: options.templateFailed,
+    templateInterrupted: options.templateInterrupted,
+    templateQuestion: options.templateQuestion,
+    templatePermission: options.templatePermission,
+    templateSubagent: options.templateSubagent,
+    templateRetry: options.templateRetry,
+    maxTitleChars: options.maxTitleChars,
+    maxToolChars: options.maxToolChars
+  };
+}
+function readSettingsFile() {
+  try {
+    const parsed = JSON.parse(fs2.readFileSync(SETTINGS_FILE, "utf8"));
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    return parsed;
+  } catch (error) {
+    const code = error?.code;
+    if (code !== "ENOENT") console.warn("[voice-notify] could not read settings.json", error);
+    return {};
+  }
+}
+function writeSettingsFile(settings) {
+  const temp = `${SETTINGS_FILE}.tmp`;
+  fs2.writeFileSync(temp, `${JSON.stringify(settings, null, 2)}
+`, "utf8");
+  fs2.renameSync(temp, SETTINGS_FILE);
+}
 function withTimeout(promise, ms, label) {
   if (ms <= 0) return promise;
   return new Promise((resolve, reject) => {
@@ -136190,8 +136339,10 @@ var index_default = {
   async setup(ctx) {
     if (!ctx || typeof ctx.event?.subscribe !== "function") return () => {
     };
-    const options = normalizeOptions(ctx.options);
-    const audioOptions = toAudioOptions(options);
+    const rawOptions = ctx.options ?? {};
+    const savedSettings = readSettingsFile();
+    let options = normalizeOptions({ ...rawOptions, ...savedSettings });
+    let audioOptions = toAudioOptions(options);
     const cleanups = [];
     const inflight = /* @__PURE__ */ new Map();
     const debounces = /* @__PURE__ */ new Map();
@@ -136237,6 +136388,28 @@ var index_default = {
         ...overrides,
         strategy
       };
+    }
+    function currentSettings() {
+      return settingsFrom(options);
+    }
+    function applySettings(patch) {
+      const next = normalizeOptions({ ...options, ...patch ?? {} });
+      const publicNext = settingsFrom(next);
+      writeSettingsFile(publicNext);
+      options = next;
+      audioOptions = toAudioOptions(next);
+      return publicNext;
+    }
+    function resetSettings() {
+      try {
+        fs2.unlinkSync(SETTINGS_FILE);
+      } catch (error) {
+        const code = error?.code;
+        if (code !== "ENOENT") throw error;
+      }
+      options = normalizeOptions(rawOptions);
+      audioOptions = toAudioOptions(options);
+      return currentSettings();
     }
     function recentlyPlayed(lockKey) {
       try {
@@ -136524,6 +136697,39 @@ var index_default = {
       toolSpoken.set(sessionID, Date.now());
       const ok = await enqueue(text, segments, key, lockKey, 2, audio, wait, 2e4);
       return { ok, played: wait && ok, ...ok ? {} : { error: "not queued" } };
+    }
+    if (ctx.rpc && typeof ctx.rpc.register === "function") {
+      try {
+        const rpcRegistration = await ctx.rpc.register(VoiceNotifyRpc, {
+          get: async () => currentSettings(),
+          update: async (input) => applySettings(input ?? {}),
+          reset: async () => resetSettings(),
+          test: async (input) => {
+            const text = String(input?.text ?? "").trim() || "\u041F\u0440\u0438\u0432\u0435\u0442! \u042D\u0442\u043E \u043F\u0440\u043E\u0432\u0435\u0440\u043A\u0430 \u0433\u043E\u043B\u043E\u0441\u0430 Voice Notify.";
+            const voice = typeof input?.voice === "string" && input.voice.trim() ? input.voice.trim() : void 0;
+            const overrides = {};
+            if (voice) {
+              overrides.voiceRu = voice;
+              overrides.voiceEn = voice;
+            }
+            try {
+              const result = await speakText(text, "settings-test", overrides, false);
+              return {
+                ok: result.ok,
+                queued: result.ok,
+                ...result.ok ? {} : { error: result.error ?? "not queued" }
+              };
+            } catch (error) {
+              return { ok: false, queued: false, error: String(error) };
+            }
+          }
+        });
+        if (rpcRegistration && typeof rpcRegistration.dispose === "function") {
+          cleanups.push(() => rpcRegistration.dispose());
+        }
+      } catch (error) {
+        console.warn("[voice-notify] settings RPC registration failed", error);
+      }
     }
     try {
       const toolRegistration = await ctx.tool.transform((editor) => {
