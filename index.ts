@@ -817,7 +817,7 @@ export default {
               },
               strategy: {
                 type: "string",
-                enum: ["auto", "whole", "cmu", "transliterate"],
+                enum: ["auto", "whole", "hybrid", "cmu", "transliterate"],
                 description:
                   "Text shaping strategy. Default: auto (native Russian voice → cmu, multilingual voice → whole).",
               },

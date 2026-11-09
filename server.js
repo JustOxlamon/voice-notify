@@ -136763,7 +136763,7 @@ var index_default = {
               },
               strategy: {
                 type: "string",
-                enum: ["auto", "whole", "cmu", "transliterate"],
+                enum: ["auto", "whole", "hybrid", "cmu", "transliterate"],
                 description: "Text shaping strategy. Default: auto (native Russian voice \u2192 cmu, multilingual voice \u2192 whole)."
               },
               wait: {

@@ -5,7 +5,8 @@
 A server-side plugin for **OpenCode V2** that speaks session events through local
 TTS. It reads the session title when a turn finishes, asks for attention on
 questions and permission requests, announces subagent completion, and exposes a
-`speak` tool so the model can deliberately read text aloud.
+`speak` tool so the model can deliberately read text aloud. A small TUI screen
+(`/voice-notify`) configures the voice pool, events, volume, and phrases.
 
 ## Features
 
@@ -20,6 +21,8 @@ questions and permission requests, announces subagent completion, and exposes a
 - `speak` tool: the model can read arbitrary text on demand.
 - TUI settings screen: run `/voice-notify` (or use Ctrl+P) to change events,
   voices, volume, rate, templates, SAPI fallback, and play a test phrase.
+- Settings are saved to `settings.json` and applied immediately; the file is
+  local and ignored by git.
 - edge-tts retries, serialized synthesis, on-disk cache, and optional SAPI
   fallback (off by default).
 - Tested on Windows; works on macOS/Linux with `ffmpeg`/`ffplay`. SAPI fallback
@@ -150,9 +153,11 @@ Run `/voice-notify` in the TUI, or press `Ctrl+P` and choose **Voice Notify:
 - a test phrase.
 
 Values are saved to `settings.json` next to the plugin and applied immediately.
-`settings.json` is local and ignored by git. The built-in OpenCode `/settings`
-dialog is a static core list, so plugins cannot add rows to it; `/voice-notify`
-is the supported plugin-level equivalent.
+`settings.json` is local and ignored by git. The screen also has **Reset**,
+which removes the local overrides and returns to the plugin options or built-in
+defaults. The built-in OpenCode `/settings` dialog is a static core list, so
+plugins cannot add rows to it; `/voice-notify` is the supported plugin-level
+equivalent.
 
 ## Configuration
 
@@ -208,11 +213,28 @@ Replace the `package` path with your clone:
 If the plugin is already discovered, the explicit entry is only needed to pass
 options; OpenCode deduplicates the target.
 
+### Settings file
+
+The TUI screen writes `settings.json` next to `server.js`:
+
+```text
+<plugin>/settings.json
+```
+
+Precedence:
+
+1. `settings.json` written by `/voice-notify`;
+2. `options` from `opencode.json(c)`;
+3. built-in defaults in `index.ts`.
+
+The file is created on the first change, contains only user-facing settings,
+and is deliberately ignored by git. Use **Reset** in the screen to delete it.
+
 ### Main options
 
 | Option | Default | Meaning |
 |---|---|---|
-| `strategy` | `auto` | `auto` — native RU voice → `cmu`, multilingual voice → `whole`; or force `cmu`/`whole`/`transliterate`. |
+| `strategy` | `auto` | `auto` — native RU voice → `cmu`, multilingual voice → `whole`; or force `cmu`/`whole`/`hybrid`/`transliterate`. |
 | `voicePool` | Svetlana, Ava, Seraphina | Voices used for the stable per-session selection. |
 | `voiceVariants` | `true` | Pick a rate preset per session; `false` uses `rate`/`pitch`. |
 | `events` | success, failed, interrupted, question, permission, subagent | Events to voice. Add `retry` if wanted. |
@@ -221,6 +243,23 @@ options; OpenCode deduplicates the target.
 | `maxTitleChars` | `120` | Limit for automatic event phrases. |
 | `maxToolChars` | `2000` | Limit for `speak` text. |
 | `volume` | `0.8` | ffplay volume, 0..1. |
+
+### Other options
+
+| Option | Default | Meaning |
+|---|---|---|
+| `rate` | `+0%` | Base rate used when `voiceVariants` is `false`. |
+| `pitch` | `+0Hz` | Pitch override; keep at zero for a natural voice. |
+| `template` | `Готово: {title}` | Phrase for successful completion. |
+| `templateFailed` | `Ошибка: {title}` | Phrase for failures. |
+| `templateInterrupted` | `Прервано: {title}` | Phrase for interruptions. |
+| `templateQuestion` | `Вопрос: {title}` | Phrase for questions. |
+| `templatePermission` | `Требуется разрешение: {title}` | Phrase for permission requests. |
+| `templateSubagent` | `Сабагент готов: {title}` | Phrase for subagent completion. |
+| `templateRetry` | `Повторная попытка: {title}` | Phrase for retry announcements. |
+| `python` | auto | Python executable for `edge-tts`. |
+| `ffmpeg` | auto | ffmpeg executable. |
+| `ffplay` | auto | ffplay executable. |
 
 ### Voice pool and per-session selection
 
@@ -251,6 +290,8 @@ To use only Svetlana:
   this is usually the wrong choice: they receive Cyrillic transliteration of
   English words and read it with a Russian accent.
 - `whole` — read the original text exactly as written.
+- `hybrid` — split a phrase into Russian and English segments and let each
+  segment use its natural language; useful for long mixed-language text.
 - `transliterate` — one voice plus a small English-tech dictionary.
 
 If English sounded bad on Ava/Seraphina, it was because `cmu` was applied to a
@@ -275,10 +316,11 @@ Input:
 ```
 
 - `text` — required; markdown is stripped; up to `maxToolChars`.
-- `voice` — optional, one of `voicePool`; default is the session's stable voice.
+- `voice` — optional voice from the current pool; default is the session's
+  stable voice. An unknown name falls back to the session voice.
 - `variant` — optional 0..7 rate preset.
 - `rate` / `pitch` — optional manual overrides.
-- `strategy` — `auto` (default), `whole`, `cmu`, or `transliterate`.
+- `strategy` — `auto` (default), `whole`, `hybrid`, `cmu`, or `transliterate`.
 - `wait` — wait for playback before returning.
 
 Returns `Speech played.`, `Speech queued.`, or `Speech failed: ...`.
@@ -303,6 +345,10 @@ the model does not read the same thing twice.
 
 Audio plays on the machine running the OpenCode **server**. A remote server would
 play audio on the remote host, not on the client.
+
+The TUI screen is a separate plugin part. It calls the server over the
+`voice-notify` RPC (`get`, `update`, `reset`, `test`), so changes apply to the
+running server immediately and do not require a synthesis restart.
 
 ## Build from source
 
