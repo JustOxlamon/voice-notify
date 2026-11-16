@@ -389,9 +389,17 @@ async function openSettings(context: Context) {
       let settings: VoiceNotifySettings
       try {
         settings = await api(context).get({})
-      } catch (error) {
-        toastError(context, `Сервер Voice Notify недоступен: ${textOf(error)}`)
-        return
+      } catch (firstError) {
+        // The server RPC may not be registered the instant the screen opens
+        // (the plugin is still warming up/re-registering). Retry once before
+        // giving up so a momentary "RPC is unavailable" doesn't block editing.
+        await new Promise((resolve) => setTimeout(resolve, 400))
+        try {
+          settings = await api(context).get({})
+        } catch (error) {
+          toastError(context, `Сервер Voice Notify недоступен: ${textOf(error)}`)
+          return
+        }
       }
 
       const choice = await context.ui.dialog.select<string>({

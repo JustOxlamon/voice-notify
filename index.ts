@@ -776,7 +776,7 @@ export default {
           cleanups.push(() => rpcRegistration.dispose())
         }
       } catch (error) {
-        console.warn("[voice-notify] settings RPC registration failed", error)
+        console.error("[voice-notify] settings RPC registration failed", error)
       }
     }
 
