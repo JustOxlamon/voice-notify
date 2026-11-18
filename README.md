@@ -155,11 +155,25 @@ Run `/voice-notify` in the TUI, or press `Ctrl+P` and choose **Voice Notify:
 - a test phrase.
 
 Values are saved to `settings.json` next to the plugin and applied immediately.
-`settings.json` is local and ignored by git. The screen also has **Reset**,
-which removes the local overrides and returns to the plugin options or built-in
-defaults. The built-in OpenCode `/settings` dialog is a static core list, so
-plugins cannot add rows to it; `/voice-notify` is the supported plugin-level
-equivalent.
+Everything — voice, volume, templates, mode — is re-read as soon as the file
+changes, so no restart or `/reload` is needed. `settings.json` is local and
+ignored by git. The screen also has **Reset**, which removes the local overrides
+and returns to the plugin options or built-in defaults. The built-in OpenCode
+`/settings` dialog is a static core list, so plugins cannot add rows to it;
+`/voice-notify` is the supported plugin-level equivalent.
+
+### Output mode and calls
+
+**Output mode** controls what a notification sounds like:
+
+- `voice` — the configured phrase read by the session voice (default);
+- `sound` — a short two-tone chime instead of speech, generated once with
+  ffmpeg and cached as `cache/chime.mp3`;
+- `off` — nothing is played, and the `speak` tool is gated too.
+
+Use `sound` or `off` when you are on a call or screen sharing and do not want
+the voice to read session titles aloud. Volume still applies to the chime, so
+0% stays silent.
 
 ## Configuration
 
