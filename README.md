@@ -20,7 +20,8 @@ questions and permission requests, announces subagent completion, and exposes a
 - One speech queue with priorities; phrases never overlap.
 - `speak` tool: the model can read arbitrary text on demand.
 - TUI settings screen: run `/voice-notify` (or use Ctrl+P) to change events,
-  voices, volume, rate, templates, SAPI fallback, and play a test phrase.
+  voices, output mode (voice/chime/silent), volume, rate, templates, SAPI
+  fallback, and play a test phrase.
 - Settings are saved to `settings.json` and applied immediately; the file is
   local and ignored by git.
 - edge-tts retries, serialized synthesis, on-disk cache, and optional SAPI
@@ -147,6 +148,7 @@ Run `/voice-notify` in the TUI, or press `Ctrl+P` and choose **Voice Notify:
 
 - which events are announced;
 - the voice pool (add or remove edge-tts voices);
+- output mode: voice, a short chime, or silence (for calls);
 - per-session voice variation, rate, and volume;
 - SAPI fallback and text strategy;
 - announcement templates and length limits;
@@ -243,6 +245,7 @@ and is deliberately ignored by git. Use **Reset** in the screen to delete it.
 | `maxTitleChars` | `120` | Limit for automatic event phrases. |
 | `maxToolChars` | `2000` | Limit for `speak` text. |
 | `volume` | `0.8` | ffplay volume, 0..1. |
+| `mode` | `voice` | `voice` speaks, `sound` plays a short chime instead (handy on calls), `off` is silent. |
 
 ### Other options
 

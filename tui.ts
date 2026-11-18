@@ -10,11 +10,14 @@ import type { Context } from "@opencode/plugin/tui/context"
 import {
   DEFAULT_VOICES,
   EVENT_LABELS,
+  MODE_LABELS,
   RATE_PRESETS,
   STRATEGY_LABELS,
   VOICE_NOTIFY_EVENTS,
+  VOICE_NOTIFY_MODES,
   VoiceNotifyRpc,
   type VoiceNotifyEvent,
+  type VoiceNotifyMode,
   type VoiceNotifySettings,
   type VoiceNotifyStrategy,
 } from "./rpc.ts"
@@ -107,10 +110,16 @@ function menuOptions(settings: VoiceNotifySettings) {
       description: settings.voicePool.map(voiceLabel).join(", ") || "пул не задан",
     },
     {
+      title: "Режим вывода",
+      value: "mode",
+      category: "Основное",
+      description: MODE_LABELS[settings.mode]?.description ?? settings.mode,
+    },
+    {
       title: "Громкость",
       value: "volume",
       category: "Основное",
-      description: `${Math.round(currentVolume(settings) * 100)}%`,
+      description: `${Math.round(currentVolume(settings) * 100)}%${currentVolume(settings) === 0 ? " (тишина)" : ""}`,
     },
     {
       title: "Скорость",
@@ -259,6 +268,23 @@ async function editVolume(context: Context, settings: VoiceNotifySettings): Prom
   })
   if (choice === undefined) return
   await api(context).update({ volume: choice })
+}
+
+async function editMode(context: Context, settings: VoiceNotifySettings): Promise<void> {
+  const choice = await context.ui.dialog.select<VoiceNotifyMode>({
+    title: "Режим вывода",
+    description: "Звук или «Выключено» удобны для приватности во время созвонов",
+    options: VOICE_NOTIFY_MODES.map((value) => ({
+      title: MODE_LABELS[value].title,
+      value,
+      description:
+        value === settings.mode
+          ? `${MODE_LABELS[value].description} (текущий)`
+          : MODE_LABELS[value].description,
+    })),
+  })
+  if (choice === undefined) return
+  await api(context).update({ mode: choice })
 }
 
 async function editRate(context: Context, settings: VoiceNotifySettings): Promise<void> {
@@ -419,6 +445,9 @@ async function openSettings(context: Context) {
             break
           case "volume":
             await editVolume(context, settings)
+            break
+          case "mode":
+            await editMode(context, settings)
             break
           case "rate":
             await editRate(context, settings)

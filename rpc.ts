@@ -16,6 +16,10 @@ export type VoiceNotifyEvent = (typeof VOICE_NOTIFY_EVENTS)[number]
 
 export type VoiceNotifyStrategy = "auto" | "whole" | "hybrid" | "transliterate" | "cmu"
 
+export const VOICE_NOTIFY_MODES = ["voice", "sound", "off"] as const
+
+export type VoiceNotifyMode = (typeof VOICE_NOTIFY_MODES)[number]
+
 export type VoiceNotifySettings = {
   events: VoiceNotifyEvent[]
   subagents: boolean
@@ -23,6 +27,7 @@ export type VoiceNotifySettings = {
   voiceVariants: boolean
   rate: string
   volume: number
+  mode: VoiceNotifyMode
   fallbackSapi: boolean
   strategy: VoiceNotifyStrategy
   template: string
@@ -54,6 +59,12 @@ export const EVENT_LABELS: Record<VoiceNotifyEvent, { title: string; description
   retry: { title: "Повтор", description: "Запланирована повторная попытка" },
 }
 
+export const MODE_LABELS: Record<VoiceNotifyMode, { title: string; description: string }> = {
+  voice: { title: "Голос", description: "Обычная озвучка голосом" },
+  sound: { title: "Звук", description: "Короткий сигнал вместо голоса — для созвонов" },
+  off: { title: "Выключено", description: "Ничего не проигрывать" },
+}
+
 export const STRATEGY_LABELS: Record<VoiceNotifyStrategy, { title: string; description: string }> = {
   auto: {
     title: "Авто",
@@ -76,6 +87,7 @@ const settingsProperties = {
   voiceVariants: { type: "boolean" },
   rate: { type: "string" },
   volume: { type: "number", minimum: 0, maximum: 1 },
+  mode: { type: "string", enum: [...VOICE_NOTIFY_MODES] },
   fallbackSapi: { type: "boolean" },
   strategy: {
     type: "string",

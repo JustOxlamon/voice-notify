@@ -139,6 +139,47 @@ function pruneCache(max = MAX_CACHE_FILES) {
 var SYNTH_LOCK_FILE = path.join(CACHE_DIR, "synth.lock");
 var LOCK_STALE_MS = 3e4;
 var LOCK_WAIT_MS = 3e4;
+var CHIME_FILE = path.join(CACHE_DIR, "chime.mp3");
+async function ensureChime(options) {
+  try {
+    const stat = fs.statSync(CHIME_FILE);
+    if (stat.size > 512) return CHIME_FILE;
+  } catch {
+  }
+  ensureDir(CACHE_DIR);
+  const temp = `${CHIME_FILE}.tmp-${process.pid}-${Date.now()}`;
+  const result = await run(
+    options.ffmpeg,
+    [
+      "-y",
+      "-loglevel",
+      "error",
+      "-f",
+      "lavfi",
+      "-i",
+      "sine=frequency=880:duration=0.1",
+      "-f",
+      "lavfi",
+      "-i",
+      "sine=frequency=1175:duration=0.16",
+      "-filter_complex",
+      "[0:a][1:a]concat=n=2:v=0:a=1,afade=t=in:st=0:d=0.01,volume=0.7",
+      "-ac",
+      "1",
+      "-c:a",
+      "libmp3lame",
+      "-b:a",
+      "64k",
+      "-f",
+      "mp3",
+      temp
+    ],
+    15e3
+  );
+  if (result.code !== 0) throw new Error(`ffmpeg chime failed: ${result.stderr.slice(0, 200)}`);
+  fs.renameSync(temp, CHIME_FILE);
+  return CHIME_FILE;
+}
 async function withSynthLock(fn) {
   ensureDir(CACHE_DIR);
   const started = Date.now();
@@ -435,6 +476,7 @@ var VOICE_NOTIFY_EVENTS = [
   "subagent",
   "retry"
 ];
+var VOICE_NOTIFY_MODES = ["voice", "sound", "off"];
 var DEFAULT_VOICES = [
   "ru-RU-SvetlanaNeural",
   "en-US-AvaMultilingualNeural",
@@ -451,6 +493,7 @@ var settingsProperties = {
   voiceVariants: { type: "boolean" },
   rate: { type: "string" },
   volume: { type: "number", minimum: 0, maximum: 1 },
+  mode: { type: "string", enum: [...VOICE_NOTIFY_MODES] },
   fallbackSapi: { type: "boolean" },
   strategy: {
     type: "string",
@@ -136162,6 +136205,7 @@ var DEFAULTS = {
   rate: "+0%",
   pitch: "+0Hz",
   volume: 0.8,
+  mode: "voice",
   fallbackSapi: false,
   voiceVariants: true,
   python: "",
@@ -136231,6 +136275,7 @@ function normalizeOptions(raw) {
     rate: String(pick("rate")),
     pitch: String(pick("pitch")),
     volume: Math.max(0, Math.min(1, Number(pick("volume")) || 0)),
+    mode: VOICE_NOTIFY_MODES.includes(String(pick("mode"))) ? String(pick("mode")) : "voice",
     fallbackSapi: pick("fallbackSapi") === true,
     voiceVariants: pick("voiceVariants") !== false,
     python: String(pick("python") ?? ""),
@@ -136276,6 +136321,7 @@ function settingsFrom(options) {
     voiceVariants: options.voiceVariants,
     rate: options.rate,
     volume: options.volume,
+    mode: options.mode,
     fallbackSapi: options.fallbackSapi,
     strategy: options.strategy,
     template: options.template,
@@ -136354,6 +136400,7 @@ var index_default = {
     let lastKey = "";
     let lastPlayedAt = 0;
     let draining = false;
+    let settingsStamp = null;
     function hashSession(sessionID) {
       let hash = 2166136261;
       for (let index = 0; index < sessionID.length; index += 1) {
@@ -136393,11 +136440,18 @@ var index_default = {
       return settingsFrom(options);
     }
     function applySettings(patch) {
+      syncSettings();
       const next = normalizeOptions({ ...options, ...patch ?? {} });
       const publicNext = settingsFrom(next);
       writeSettingsFile(publicNext);
       options = next;
       audioOptions = toAudioOptions(next);
+      try {
+        const stat = fs2.statSync(SETTINGS_FILE);
+        settingsStamp = { mtimeMs: stat.mtimeMs, size: stat.size };
+      } catch {
+        settingsStamp = null;
+      }
       return publicNext;
     }
     function resetSettings() {
@@ -136409,7 +136463,30 @@ var index_default = {
       }
       options = normalizeOptions(rawOptions);
       audioOptions = toAudioOptions(options);
+      settingsStamp = null;
       return currentSettings();
+    }
+    function syncSettings() {
+      let stat;
+      try {
+        stat = fs2.statSync(SETTINGS_FILE);
+      } catch {
+        stat = void 0;
+      }
+      if (!stat) {
+        if (settingsStamp !== null) {
+          settingsStamp = null;
+          options = normalizeOptions(rawOptions);
+          audioOptions = toAudioOptions(options);
+        }
+        return;
+      }
+      if (settingsStamp !== null && settingsStamp.mtimeMs === stat.mtimeMs && settingsStamp.size === stat.size) {
+        return;
+      }
+      settingsStamp = { mtimeMs: stat.mtimeMs, size: stat.size };
+      options = normalizeOptions({ ...rawOptions, ...readSettingsFile() });
+      audioOptions = toAudioOptions(options);
     }
     function recentlyPlayed(lockKey) {
       try {
@@ -136578,12 +136655,12 @@ var index_default = {
           const item = queue.shift();
           let played = false;
           try {
-            const file = await fileFor(item.segments, item.key, item.audio, item.waitMs);
+            const file = item.chime ? await ensureChime(item.audio) : await fileFor(item.segments, item.key, item.audio, item.waitMs);
             if (disposed) break;
             await withPlayLock(() => playAndWait(item.audio, file));
             played = true;
           } catch (error) {
-            if (options.fallbackSapi && !disposed) {
+            if (options.fallbackSapi && !disposed && !item.chime && item.text) {
               console.warn("[voice-notify] edge-tts failed; using SAPI fallback", error);
               try {
                 await withPlayLock(() => speakSapi(item.audio, item.text));
@@ -136599,7 +136676,7 @@ var index_default = {
         if (!disposed && queue.length > 0) void drainQueue();
       }
     }
-    function enqueue(text, segments, key, lockKey, priority, audio, wait = false, waitMs = PREWARM_WAIT_MS) {
+    function enqueue(text, segments, key, lockKey, priority, audio, wait = false, waitMs = PREWARM_WAIT_MS, chime = false) {
       if (disposed) return Promise.resolve(false);
       if (queue.some((item2) => item2.lockKey === lockKey)) return Promise.resolve(false);
       if (queue.length >= MAX_QUEUE) {
@@ -136610,7 +136687,7 @@ var index_default = {
       const done = wait ? new Promise((resolve) => {
         resolveDone = resolve;
       }) : void 0;
-      const item = { text, segments, key, lockKey, priority, audio, waitMs, done: resolveDone };
+      const item = { text, segments, key, lockKey, priority, audio, waitMs, chime, done: resolveDone };
       const index = queue.findIndex((queued) => queued.priority < priority);
       if (index === -1) queue.push(item);
       else queue.splice(index, 0, item);
@@ -136618,11 +136695,26 @@ var index_default = {
       return done ?? Promise.resolve(true);
     }
     function announce(kind, sessionID, session, overrideTitle) {
-      if (disposed || !wanted(kind)) return;
+      syncSettings();
+      if (disposed || options.mode === "off" || !wanted(kind)) return;
       if (session?.parentID && !options.subagents && kind !== "question" && kind !== "permission") return;
       if (kind !== "question" && kind !== "permission") {
         const lastTool = toolSpoken.get(sessionID) ?? 0;
         if (Date.now() - lastTool < 15e3) return;
+      }
+      const priority = kind === "question" || kind === "permission" || kind === "failed" ? 1 : 0;
+      if (options.mode === "sound") {
+        const audio2 = audioFor(sessionID);
+        const lockKey2 = `${sessionID}:${kind}:chime`;
+        if (recentlyPlayed(lockKey2)) return;
+        markPlayed(lockKey2);
+        const now2 = Date.now();
+        const memoryKey2 = `chime:${kind}`;
+        if (memoryKey2 === lastKey && now2 - lastPlayedAt < DUPLICATE_WINDOW_MS) return;
+        lastKey = memoryKey2;
+        lastPlayedAt = now2;
+        void enqueue("", [], "chime", lockKey2, priority, audio2, false, PREWARM_WAIT_MS, true);
+        return;
       }
       const template = templateFor(kind);
       const text = buildText(session, template, overrideTitle);
@@ -136637,7 +136729,6 @@ var index_default = {
       if (memoryKey === lastKey && now - lastPlayedAt < DUPLICATE_WINDOW_MS) return;
       lastKey = memoryKey;
       lastPlayedAt = now;
-      const priority = kind === "question" || kind === "permission" || kind === "failed" ? 1 : 0;
       void enqueue(text, segments, key, lockKey, priority, audio);
     }
     async function handle(event) {
@@ -136653,6 +136744,8 @@ var index_default = {
       }
       if (!sessionID) return;
       if (type === "session.execution.started" || type === "session.renamed") {
+        syncSettings();
+        if (options.mode !== "voice") return;
         const session2 = await getSession(sessionID) ?? data.session ?? data;
         if (type === "session.renamed" && data.title) session2.title = data.title;
         if (session2?.parentID && !options.subagents) return;
@@ -136687,8 +136780,16 @@ var index_default = {
       }
       announce(kind, sessionID, session);
     }
-    async function speakText(rawText, sessionID, overrides = {}, wait = false) {
+    async function speakText(rawText, sessionID, overrides = {}, wait = false, force = false) {
       if (disposed) return { ok: false, played: false, error: "plugin is disposed" };
+      syncSettings();
+      if (!force && options.mode !== "voice") {
+        return {
+          ok: false,
+          played: false,
+          error: options.mode === "off" ? "voice output is off" : "voice output is set to sound only"
+        };
+      }
       const text = preprocess(String(rawText ?? ""), options.maxToolChars);
       if (!text) return { ok: false, played: false, error: "empty text" };
       const audio = audioFor(sessionID, overrides);
@@ -136701,7 +136802,10 @@ var index_default = {
     if (ctx.rpc && typeof ctx.rpc.register === "function") {
       try {
         const rpcRegistration = await ctx.rpc.register(VoiceNotifyRpc, {
-          get: async () => currentSettings(),
+          get: async () => {
+            syncSettings();
+            return currentSettings();
+          },
           update: async (input) => applySettings(input ?? {}),
           reset: async () => resetSettings(),
           test: async (input) => {
@@ -136713,7 +136817,7 @@ var index_default = {
               overrides.voiceEn = voice;
             }
             try {
-              const result = await speakText(text, "settings-test", overrides, false);
+              const result = await speakText(text, "settings-test", overrides, false, true);
               return {
                 ok: result.ok,
                 queued: result.ok,
@@ -136777,6 +136881,12 @@ var index_default = {
           execute: async (input, toolContext) => {
             const text = String(input?.text ?? "");
             const sessionID = String(toolContext?.sessionID ?? "tool");
+            syncSettings();
+            if (options.mode !== "voice") {
+              return {
+                content: `Speech skipped: Voice Notify output mode is "${options.mode}". No speech was played.`
+              };
+            }
             const variantIndex = typeof input?.variant === "number" ? input.variant : void 0;
             const session = sessionVoice(sessionID);
             const variant = variantIndex === void 0 ? session : {

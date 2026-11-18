@@ -196,6 +196,55 @@ const SYNTH_LOCK_FILE = path.join(CACHE_DIR, "synth.lock")
 const LOCK_STALE_MS = 30000
 const LOCK_WAIT_MS = 30000
 
+const CHIME_FILE = path.join(CACHE_DIR, "chime.mp3")
+
+/**
+ * Short two-tone cue used by the "sound" output mode (privacy on calls).
+ * Built once with ffmpeg and cached next to the speech clips; the player
+ * applies the configured volume, so one file serves every volume.
+ */
+export async function ensureChime(options: AudioOptions): Promise<string> {
+  try {
+    const stat = fs.statSync(CHIME_FILE)
+    if (stat.size > 512) return CHIME_FILE
+  } catch {
+    /* generate below */
+  }
+  ensureDir(CACHE_DIR)
+  const temp = `${CHIME_FILE}.tmp-${process.pid}-${Date.now()}`
+  const result = await run(
+    options.ffmpeg,
+    [
+      "-y",
+      "-loglevel",
+      "error",
+      "-f",
+      "lavfi",
+      "-i",
+      "sine=frequency=880:duration=0.1",
+      "-f",
+      "lavfi",
+      "-i",
+      "sine=frequency=1175:duration=0.16",
+      "-filter_complex",
+      "[0:a][1:a]concat=n=2:v=0:a=1,afade=t=in:st=0:d=0.01,volume=0.7",
+      "-ac",
+      "1",
+      "-c:a",
+      "libmp3lame",
+      "-b:a",
+      "64k",
+      "-f",
+      "mp3",
+      temp,
+    ],
+    15000,
+  )
+  if (result.code !== 0) throw new Error(`ffmpeg chime failed: ${result.stderr.slice(0, 200)}`)
+  fs.renameSync(temp, CHIME_FILE)
+  return CHIME_FILE
+}
+
 /** Serialize edge-tts requests across plugin instances. */
 async function withSynthLock<T>(fn: () => Promise<T>): Promise<T> {
   ensureDir(CACHE_DIR)

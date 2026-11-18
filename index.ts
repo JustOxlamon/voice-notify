@@ -17,6 +17,7 @@ import {
   defaultFfmpeg,
   defaultFfplay,
   defaultPython,
+  ensureChime,
   playAndWait,
   pruneCache,
   speakSapi,
@@ -27,8 +28,10 @@ import type { AudioOptions } from "./audio.ts"
 import {
   DEFAULT_VOICES,
   VOICE_NOTIFY_EVENTS,
+  VOICE_NOTIFY_MODES,
   VoiceNotifyRpc,
   type VoiceNotifyEvent,
+  type VoiceNotifyMode,
   type VoiceNotifySettings,
   type VoiceNotifyStrategy,
 } from "./rpc.ts"
@@ -55,6 +58,7 @@ type Options = {
   rate: string
   pitch: string
   volume: number
+  mode: VoiceNotifyMode
   fallbackSapi: boolean
   voiceVariants: boolean
   python: string
@@ -83,6 +87,7 @@ const DEFAULTS: Options = {
   rate: "+0%",
   pitch: "+0Hz",
   volume: 0.8,
+  mode: "voice",
   fallbackSapi: false,
   voiceVariants: true,
   python: "",
@@ -169,6 +174,9 @@ function normalizeOptions(raw: unknown): Options {
     rate: String(pick("rate")),
     pitch: String(pick("pitch")),
     volume: Math.max(0, Math.min(1, Number(pick("volume")) || 0)),
+    mode: (VOICE_NOTIFY_MODES as readonly string[]).includes(String(pick("mode")))
+      ? (String(pick("mode")) as VoiceNotifyMode)
+      : "voice",
     fallbackSapi: pick("fallbackSapi") === true,
     voiceVariants: pick("voiceVariants") !== false,
     python: String(pick("python") ?? ""),
@@ -222,6 +230,7 @@ function settingsFrom(options: Options): VoiceNotifySettings {
     voiceVariants: options.voiceVariants,
     rate: options.rate,
     volume: options.volume,
+    mode: options.mode,
     fallbackSapi: options.fallbackSapi,
     strategy: options.strategy as VoiceNotifyStrategy,
     template: options.template,
@@ -303,6 +312,7 @@ export default {
       key: string
       priority: number
       audio: AudioOptions
+      chime?: boolean
       waitMs?: number
       done?: (ok: boolean) => void
     }> = []
@@ -313,6 +323,8 @@ export default {
     let lastKey = ""
     let lastPlayedAt = 0
     let draining = false
+    /** mtime/size of the last settings.json we loaded; null means "no file". */
+    let settingsStamp: { mtimeMs: number; size: number } | null = null
 
     function hashSession(sessionID: string): number {
       let hash = 2166136261
@@ -365,11 +377,18 @@ export default {
     }
 
     function applySettings(patch: Partial<VoiceNotifySettings>): VoiceNotifySettings {
+      syncSettings()
       const next = normalizeOptions({ ...options, ...(patch ?? {}) })
       const publicNext = settingsFrom(next)
       writeSettingsFile(publicNext)
       options = next
       audioOptions = toAudioOptions(next)
+      try {
+        const stat = fs.statSync(SETTINGS_FILE)
+        settingsStamp = { mtimeMs: stat.mtimeMs, size: stat.size }
+      } catch {
+        settingsStamp = null
+      }
       return publicNext
     }
 
@@ -382,7 +401,41 @@ export default {
       }
       options = normalizeOptions(rawOptions)
       audioOptions = toAudioOptions(options)
+      settingsStamp = null
       return currentSettings()
+    }
+
+    /**
+     * Settings live on disk, not in this instance. OpenCode can keep several
+     * plugin instances (and reloads them at any time), so the instance that
+     * serves the TUI RPC is often not the one that plays a notification.
+     * Re-reading on change makes every instance see edits immediately.
+     */
+    function syncSettings() {
+      let stat: ReturnType<typeof fs.statSync> | undefined
+      try {
+        stat = fs.statSync(SETTINGS_FILE)
+      } catch {
+        stat = undefined
+      }
+      if (!stat) {
+        if (settingsStamp !== null) {
+          settingsStamp = null
+          options = normalizeOptions(rawOptions)
+          audioOptions = toAudioOptions(options)
+        }
+        return
+      }
+      if (
+        settingsStamp !== null &&
+        settingsStamp.mtimeMs === stat.mtimeMs &&
+        settingsStamp.size === stat.size
+      ) {
+        return
+      }
+      settingsStamp = { mtimeMs: stat.mtimeMs, size: stat.size }
+      options = normalizeOptions({ ...rawOptions, ...readSettingsFile() })
+      audioOptions = toAudioOptions(options)
     }
 
     function recentlyPlayed(lockKey: string): boolean {
@@ -582,12 +635,14 @@ export default {
           const item = queue.shift()!
           let played = false
           try {
-            const file = await fileFor(item.segments, item.key, item.audio, item.waitMs)
+            const file = item.chime
+              ? await ensureChime(item.audio)
+              : await fileFor(item.segments, item.key, item.audio, item.waitMs)
             if (disposed) break
             await withPlayLock(() => playAndWait(item.audio, file))
             played = true
           } catch (error) {
-            if (options.fallbackSapi && !disposed) {
+            if (options.fallbackSapi && !disposed && !item.chime && item.text) {
               console.warn("[voice-notify] edge-tts failed; using SAPI fallback", error)
               try {
                 await withPlayLock(() => speakSapi(item.audio, item.text))
@@ -614,6 +669,7 @@ export default {
       audio: AudioOptions,
       wait = false,
       waitMs = PREWARM_WAIT_MS,
+      chime = false,
     ): Promise<boolean> {
       if (disposed) return Promise.resolve(false)
       if (queue.some((item) => item.lockKey === lockKey)) return Promise.resolve(false)
@@ -627,7 +683,7 @@ export default {
             resolveDone = resolve
           })
         : undefined
-      const item = { text, segments, key, lockKey, priority, audio, waitMs, done: resolveDone }
+      const item = { text, segments, key, lockKey, priority, audio, waitMs, chime, done: resolveDone }
       const index = queue.findIndex((queued) => queued.priority < priority)
       if (index === -1) queue.push(item)
       else queue.splice(index, 0, item)
@@ -636,11 +692,26 @@ export default {
     }
 
     function announce(kind: Kind, sessionID: string, session: any, overrideTitle?: string) {
-      if (disposed || !wanted(kind)) return
+      syncSettings()
+      if (disposed || options.mode === "off" || !wanted(kind)) return
       if (session?.parentID && !options.subagents && kind !== "question" && kind !== "permission") return
       if (kind !== "question" && kind !== "permission") {
         const lastTool = toolSpoken.get(sessionID) ?? 0
         if (Date.now() - lastTool < 15000) return
+      }
+      const priority = kind === "question" || kind === "permission" || kind === "failed" ? 1 : 0
+      if (options.mode === "sound") {
+        const audio = audioFor(sessionID)
+        const lockKey = `${sessionID}:${kind}:chime`
+        if (recentlyPlayed(lockKey)) return
+        markPlayed(lockKey)
+        const now = Date.now()
+        const memoryKey = `chime:${kind}`
+        if (memoryKey === lastKey && now - lastPlayedAt < DUPLICATE_WINDOW_MS) return
+        lastKey = memoryKey
+        lastPlayedAt = now
+        void enqueue("", [], "chime", lockKey, priority, audio, false, PREWARM_WAIT_MS, true)
+        return
       }
       const template = templateFor(kind)
       const text = buildText(session, template, overrideTitle)
@@ -656,7 +727,6 @@ export default {
       if (memoryKey === lastKey && now - lastPlayedAt < DUPLICATE_WINDOW_MS) return
       lastKey = memoryKey
       lastPlayedAt = now
-      const priority = kind === "question" || kind === "permission" || kind === "failed" ? 1 : 0
       void enqueue(text, segments, key, lockKey, priority, audio)
     }
 
@@ -676,6 +746,8 @@ export default {
       if (!sessionID) return
 
       if (type === "session.execution.started" || type === "session.renamed") {
+        syncSettings()
+        if (options.mode !== "voice") return
         const session = (await getSession(sessionID)) ?? data.session ?? data
         if (type === "session.renamed" && data.title) session.title = data.title
         if (session?.parentID && !options.subagents) return
@@ -729,8 +801,17 @@ export default {
       sessionID: string,
       overrides: Partial<AudioOptions> = {},
       wait = false,
+      force = false,
     ): Promise<{ ok: boolean; played: boolean; error?: string }> {
       if (disposed) return { ok: false, played: false, error: "plugin is disposed" }
+      syncSettings()
+      if (!force && options.mode !== "voice") {
+        return {
+          ok: false,
+          played: false,
+          error: options.mode === "off" ? "voice output is off" : "voice output is set to sound only",
+        }
+      }
       const text = preprocess(String(rawText ?? ""), options.maxToolChars)
       if (!text) return { ok: false, played: false, error: "empty text" }
       const audio = audioFor(sessionID, overrides)
@@ -744,7 +825,10 @@ export default {
     if (ctx.rpc && typeof ctx.rpc.register === "function") {
       try {
         const rpcRegistration = await ctx.rpc.register(VoiceNotifyRpc, {
-          get: async () => currentSettings(),
+          get: async () => {
+            syncSettings()
+            return currentSettings()
+          },
           update: async (input: any) => applySettings((input ?? {}) as Partial<VoiceNotifySettings>),
           reset: async () => resetSettings(),
           test: async (input: any) => {
@@ -761,7 +845,7 @@ export default {
               overrides.voiceEn = voice
             }
             try {
-              const result = await speakText(text, "settings-test", overrides, false)
+              const result = await speakText(text, "settings-test", overrides, false, true)
               return {
                 ok: result.ok,
                 queued: result.ok,
@@ -832,6 +916,12 @@ export default {
           execute: async (input: any, toolContext: any) => {
             const text = String(input?.text ?? "")
             const sessionID = String(toolContext?.sessionID ?? "tool")
+            syncSettings()
+            if (options.mode !== "voice") {
+              return {
+                content: `Speech skipped: Voice Notify output mode is "${options.mode}". No speech was played.`,
+              }
+            }
             const variantIndex = typeof input?.variant === "number" ? input.variant : undefined
             const session = sessionVoice(sessionID)
             const variant =
